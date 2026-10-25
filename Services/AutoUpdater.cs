@@ -26,6 +26,13 @@ namespace BinderApp.Services
         public async Task<bool> CheckAndApplyPendingUpdatesAsync(Action<string> setStatus)
         {
             string? temporaryPackagePath = null;
+            if (WorkshopAdminSettings.IsAdminBuild)
+            {
+                Log.Information("Автообновление отключено для приватной админской сборки");
+                setStatus("Автообновление отключено для админской сборки");
+                return false;
+            }
+
             string repository = GitHubRepositorySettings.GetRepository();
 
             if (string.IsNullOrWhiteSpace(repository))

@@ -38,7 +38,7 @@ The in-app **Админка** can publish the selected tab's binds directly to t
    dotnet publish BinderApp.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:UpdateRepository=mcleague/Lum-Binder -p:WorkshopApiUrl=https://lum-binder-workshop.<account>.workers.dev -p:WorkshopAdminBuild=true -o D:\RPbinder
    ```
 
-   Replace `<account>` with the Cloudflare Workers subdomain for your account. Keep this admin build private. GitHub release builds set `WorkshopAdminBuild=false` and hide the admin panel.
+   Replace `<account>` with the Cloudflare Workers subdomain for your account. Keep this admin build private. GitHub release builds set `WorkshopAdminBuild=false` and hide the admin panel; private admin builds do not auto-update from public releases.
 2. From `discord/worker`, set the hash as a Worker secret and deploy:
 
    ```powershell
