@@ -26,5 +26,12 @@
     "description": "Набор биндов для оказания первой помощи. Устанавливается в выбранную вкладку.",
     "type": "binds",
     "file": "medical-binds.json"
+  },
+  {
+    "id": "hwid-b948acf3-19e8-4f6c-952d-654df5372402",
+    "name": "ntc",
+    "description": "nrd",
+    "type": "binds",
+    "file": "hwid-b948acf3-19e8-4f6c-952d-654df5372402.json"
   }
 ]
