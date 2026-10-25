@@ -1,0 +1,78 @@
+<Window x:Class="BinderApp.Views.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay"
+        Width="300" Height="110"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowActivated="False"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize">
+
+    <Border Margin="8">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.5" Color="Black"/>
+        </Border.Effect>
+
+        <Border Background="#232529"
+                BorderBrush="{StaticResource AccentBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Opacity="0.94"
+                ClipToBounds="True"
+                MouseLeftButtonDown="Border_MouseLeftButtonDown">
+            <Grid Margin="12,9">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="4"/>
+                </Grid.RowDefinitions>
+
+                <!-- 1. Имя бинда (акцент, bold) + Кнопка Сброс (X) -->
+                <Grid Grid.Row="0">
+                    <TextBlock Text="{Binding BindName}"
+                               FontWeight="Bold"
+                               FontSize="12"
+                               Foreground="{StaticResource AccentBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,24,0"/>
+                    <Button Content="✕"
+                            Style="{StaticResource CloseButtonStyle}"
+                            Width="20" Height="20"
+                            FontSize="10"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            ToolTip="Сброс бинда"
+                            Command="{Binding StopBindCommand}"/>
+                </Grid>
+
+                <!-- 2. Шаг X/Y (серый) -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding StepLabel}"
+                           FontSize="11"
+                           FontWeight="Medium"
+                           Foreground="{StaticResource TextBrush}"
+                           Margin="0,2,0,2"/>
+
+                <!-- 3. Текст шага -->
+                <TextBlock Grid.Row="2"
+                           Text="{Binding StepPreview}"
+                           FontSize="11"
+                           Foreground="{StaticResource TextLightBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"/>
+
+                <!-- 4. Прогресс-бар 2px (акцент) -->
+                <ProgressBar Grid.Row="3"
+                             Height="2.5"
+                             Foreground="{StaticResource AccentBrush}"
+                             Background="#33363B"
+                             BorderThickness="0"
+                             IsIndeterminate="True"/>
+            </Grid>
+        </Border>
+    </Border>
+</Window>

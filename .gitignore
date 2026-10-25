@@ -1,0 +1,12 @@
+[Bb]in/
+[Oo]bj/
+.vs/
+
+/Lum Binder/
+/Lum Binder Update/
+/Готовое приложение/
+
+*.user
+*.suo
+Thumbs.db
+Desktop.ini

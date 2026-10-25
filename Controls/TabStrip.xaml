@@ -1,0 +1,50 @@
+<UserControl x:Class="BinderApp.Controls.TabStrip"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:BinderApp.Models">
+    <Grid>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <ItemsControl ItemsSource="{Binding Tabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:Tab}">
+                            <RadioButton GroupName="TabGroup"
+                                         Content="{Binding Name}"
+                                         Tag="{Binding}"
+                                         Click="TabButton_Click"
+                                         Loaded="TabButton_Loaded"
+                                         MouseRightButtonUp="TabButton_MouseRightButtonUp"
+                                         MouseDoubleClick="TabButton_MouseDoubleClick"
+                                         Style="{StaticResource TabStripItemStyle}">
+                                <RadioButton.ContextMenu>
+                                    <ContextMenu Style="{StaticResource DarkContextMenuStyle}">
+                                        <MenuItem Header="✎  Переименовать категорию"
+                                                  Style="{StaticResource DarkMenuItemStyle}"
+                                                  Click="RenameMenuItem_Click" />
+                                        <MenuItem Header="✕  Удалить категорию"
+                                                  Style="{StaticResource DarkMenuItemStyle}"
+                                                  Click="DeleteMenuItem_Click" />
+                                    </ContextMenu>
+                                </RadioButton.ContextMenu>
+                            </RadioButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Кнопка добавления новой категории (+) -->
+                <Button Content="✚"
+                        Style="{StaticResource IconButtonStyle}"
+                        Width="30" Height="30"
+                        FontSize="11"
+                        Margin="8,0,0,0"
+                        ToolTip="Добавить новую категорию вкладок"
+                        Command="{Binding AddTabCommand}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
