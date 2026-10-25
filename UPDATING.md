@@ -12,6 +12,8 @@ The app needs write access to its installation directory to apply updates. Insta
 
 Release builds also embed the public `WORKSHOP_API_URL` GitHub Actions variable. Set it to the deployed Cloudflare Worker base URL to enable the workshop integration. GitHub releases set `WorkshopAdminBuild=false`, so public builds do not show the admin panel. For a private local admin build, set `WorkshopAdminBuild=true` and provide `WorkshopApiUrl` as MSBuild properties. Private admin builds do not auto-update from public releases.
 
+The private admin panel can publish immutable photo posts with JPG or PNG images up to 3 MB. Publishing adds a new image and catalogue entry; existing workshop entries cannot be edited or deleted from the app.
+
 ## Workshop catalog
 
 The in-app Workshop reads `workshop/catalog.json` from the `main` branch and downloads JSON packages from `workshop/packs/`. Use catalog entries with type `profile` for full profiles (`tabs`) or `binds` for bind collections (`binds`). Keep package files small; the app rejects workshop JSON larger than 1 MiB. Profiles install as separate profiles and bind collections append to the selected tab.

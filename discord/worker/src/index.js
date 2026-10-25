@@ -2,6 +2,8 @@ const DISCORD_API = "https://discord.com/api/v10";
 const GITHUB_API = "https://api.github.com";
 const MAX_PACKAGE_BYTES = 40_000;
 const MAX_ADMIN_REQUEST_BYTES = 100_000;
+const MAX_ADMIN_PHOTO_REQUEST_BYTES = 4_200_000;
+const MAX_WORKSHOP_PHOTO_BYTES = 3 * 1_048_576;
 const DISCORD_EPHEMERAL = 64;
 
 class PayloadTooLargeError extends Error {}
@@ -108,7 +110,8 @@ export default {
 };
 
 async function handleAdminRequest(request, env, pathname) {
-  if (request.method !== "POST" || !["/admin/status", "/admin/publish"].includes(pathname)) {
+  if (request.method !== "POST" ||
+      !["/admin/status", "/admin/publish", "/admin/publish-photo"].includes(pathname)) {
     return Response.json({ error: "Неизвестный запрос админки." }, { status: 404 });
   }
 
@@ -116,13 +119,16 @@ async function handleAdminRequest(request, env, pathname) {
     return Response.json({ error: "Проверка HWID не настроена на Worker." }, { status: 503 });
   }
 
-  if (Number(request.headers.get("Content-Length") ?? 0) > MAX_ADMIN_REQUEST_BYTES) {
+  const maxRequestBytes = pathname === "/admin/publish-photo"
+    ? MAX_ADMIN_PHOTO_REQUEST_BYTES
+    : MAX_ADMIN_REQUEST_BYTES;
+  if (Number(request.headers.get("Content-Length") ?? 0) > maxRequestBytes) {
     return Response.json({ error: "Запрос админки слишком большой." }, { status: 413 });
   }
 
   let body;
   try {
-    const bytes = await readBounded(request, MAX_ADMIN_REQUEST_BYTES);
+    const bytes = await readBounded(request, maxRequestBytes);
     body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch (error) {
     const status = error instanceof PayloadTooLargeError ? 413 : 400;
@@ -135,6 +141,25 @@ async function handleAdminRequest(request, env, pathname) {
 
   if (pathname === "/admin/status") {
     return Response.json({ authorized: true });
+  }
+
+  if (pathname === "/admin/publish-photo") {
+    let submission;
+    try {
+      submission = validatePhotoSubmission(body);
+    } catch (error) {
+      const status = error instanceof PayloadTooLargeError ? 413 : 400;
+      return Response.json({ error: safeError(error) }, { status });
+    }
+
+    try {
+      const repository = getRepository(env);
+      await publishPhotoSubmission(env, repository, submission);
+      return Response.json({ message: `Фото-запись «${submission.name}» опубликована.` });
+    } catch (error) {
+      console.error("Workshop photo publish failed", error);
+      return Response.json({ error: safeError(error) }, { status: 500 });
+    }
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -169,6 +194,55 @@ async function handleAdminRequest(request, env, pathname) {
     console.error("Workshop admin publish failed", error);
     return Response.json({ error: safeError(error) }, { status: 500 });
   }
+}
+
+function validatePhotoSubmission(body) {
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const description = typeof body?.description === "string" ? body.description.trim() : "";
+  const contentType = body?.contentType;
+  const imageBase64 = body?.imageBase64;
+  if (!name || name.length > 60 || !description || description.length > 250) {
+    throw new Error("Название должно содержать до 60 символов, описание — до 250.");
+  }
+
+  if (!["image/jpeg", "image/png"].includes(contentType) ||
+      typeof imageBase64 !== "string" ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(imageBase64)) {
+    throw new Error("Пришли корректное фото в формате JPG или PNG.");
+  }
+
+  const imageBytes = base64ToBytes(imageBase64);
+  if (imageBytes.length < 1 || imageBytes.length > MAX_WORKSHOP_PHOTO_BYTES) {
+    throw new PayloadTooLargeError("Фото должно быть размером не более 3 МБ.");
+  }
+
+  const isJpeg = contentType === "image/jpeg" &&
+    imageBytes.length >= 3 &&
+    imageBytes[0] === 0xff &&
+    imageBytes[1] === 0xd8 &&
+    imageBytes[2] === 0xff;
+  const isPng = contentType === "image/png" &&
+    imageBytes.length >= 8 &&
+    imageBytes[0] === 0x89 &&
+    imageBytes[1] === 0x50 &&
+    imageBytes[2] === 0x4e &&
+    imageBytes[3] === 0x47 &&
+    imageBytes[4] === 0x0d &&
+    imageBytes[5] === 0x0a &&
+    imageBytes[6] === 0x1a &&
+    imageBytes[7] === 0x0a;
+  if (!isJpeg && !isPng) {
+    throw new Error("Содержимое файла не соответствует формату JPG или PNG.");
+  }
+
+  const extension = contentType === "image/jpeg" ? "jpg" : "png";
+  return {
+    id: crypto.randomUUID(),
+    name,
+    description,
+    imageBase64,
+    extension,
+  };
 }
 
 function isAuthorizedHardwareId(hardwareId, expectedHash) {
@@ -402,6 +476,49 @@ async function approvePackage(interaction, env) {
 }
 
 async function publishSubmission(env, repository, submission, packageFile) {
+  const item = {
+    id: submission.catalogId ?? `discord-${submission.id}`,
+    name: submission.name,
+    description: submission.description,
+    type: submission.type,
+    file: packageFile,
+  };
+  const packageBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
+    content: JSON.stringify(submission.package, null, 2),
+    encoding: "utf-8",
+  });
+  await publishCatalogEntry(
+    env,
+    repository,
+    item,
+    [{ path: `workshop/packs/${packageFile}`, mode: "100644", type: "blob", sha: packageBlob.sha }],
+    `Publish workshop package: ${submission.name}`,
+  );
+}
+
+async function publishPhotoSubmission(env, repository, submission) {
+  const imageFile = `photo-${submission.id}.${submission.extension}`;
+  const imageBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
+    content: submission.imageBase64,
+    encoding: "base64",
+  });
+  const item = {
+    id: `admin-photo-${submission.id}`,
+    name: submission.name,
+    description: submission.description,
+    type: "photo",
+    image: imageFile,
+  };
+  await publishCatalogEntry(
+    env,
+    repository,
+    item,
+    [{ path: `workshop/images/${imageFile}`, mode: "100644", type: "blob", sha: imageBlob.sha }],
+    `Publish workshop photo: ${submission.name}`,
+  );
+}
+
+async function publishCatalogEntry(env, repository, item, contentTreeEntries, commitMessage) {
   const ref = await githubRequest(env, "GET", `/repos/${repository}/git/ref/heads/main`);
   const parentSha = ref.object.sha;
   const catalogResponse = await githubRequest(
@@ -415,19 +532,11 @@ async function publishSubmission(env, repository, submission, packageFile) {
   if (!Array.isArray(catalog)) {
     throw new Error("Файл каталога мастерской имеет некорректный формат.");
   }
+  if (catalog.some((entry) => entry.id === item.id)) {
+    throw new Error("Запись с таким идентификатором уже существует; существующие записи не изменяются.");
+  }
 
-  const item = {
-    id: submission.catalogId ?? `discord-${submission.id}`,
-    name: submission.name,
-    description: submission.description,
-    type: submission.type,
-    file: packageFile,
-  };
-  const packageBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
-    content: JSON.stringify(submission.package, null, 2),
-    encoding: "utf-8",
-  });
-  const nextCatalog = [...catalog.filter((entry) => entry.id !== item.id), item];
+  const nextCatalog = [...catalog, item];
   const catalogBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
     content: `${JSON.stringify(nextCatalog, null, 2)}\n`,
     encoding: "utf-8",
@@ -435,12 +544,12 @@ async function publishSubmission(env, repository, submission, packageFile) {
   const tree = await githubRequest(env, "POST", `/repos/${repository}/git/trees`, {
     base_tree: parentSha,
     tree: [
-      { path: `workshop/packs/${packageFile}`, mode: "100644", type: "blob", sha: packageBlob.sha },
+      ...contentTreeEntries,
       { path: "workshop/catalog.json", mode: "100644", type: "blob", sha: catalogBlob.sha },
     ],
   });
   const commit = await githubRequest(env, "POST", `/repos/${repository}/git/commits`, {
-    message: `Publish workshop package: ${submission.name}`,
+    message: commitMessage,
     tree: tree.sha,
     parents: [parentSha],
   });

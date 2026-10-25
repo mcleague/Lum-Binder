@@ -44,6 +44,9 @@ namespace BinderApp.ViewModels
         private string _workshopAdminHardwareId = string.Empty;
         private string _workshopAdminPackageName = string.Empty;
         private string _workshopAdminPackageDescription = string.Empty;
+        private string _workshopPhotoName = string.Empty;
+        private string _workshopPhotoDescription = string.Empty;
+        private string _workshopPhotoPath = string.Empty;
         private string _workshopAdminStatus = "Откройте вкладку, чтобы проверить доступ.";
         private bool _isLoadingWorkshop;
         private bool _isCheckingWorkshopAdmin;
@@ -103,6 +106,10 @@ namespace BinderApp.ViewModels
             CopyWorkshopAdminHardwareIdCommand = new RelayCommand(CopyWorkshopAdminHardwareId);
             PublishWorkshopBindsCommand = new RelayCommand(
                 () => _ = PublishWorkshopBindsAsync(),
+                () => IsWorkshopAdminAuthorized && !_isPublishingWorkshopPackage);
+            ChooseWorkshopPhotoCommand = new RelayCommand(ChooseWorkshopPhoto);
+            PublishWorkshopPhotoCommand = new RelayCommand(
+                () => _ = PublishWorkshopPhotoAsync(),
                 () => IsWorkshopAdminAuthorized && !_isPublishingWorkshopPackage);
 
             // Режимы экрана (Бинды, Переменные, Блокнот)
@@ -235,6 +242,32 @@ namespace BinderApp.ViewModels
             get => _workshopAdminPackageDescription;
             set => SetProperty(ref _workshopAdminPackageDescription, value);
         }
+
+        public string WorkshopPhotoName
+        {
+            get => _workshopPhotoName;
+            set => SetProperty(ref _workshopPhotoName, value);
+        }
+
+        public string WorkshopPhotoDescription
+        {
+            get => _workshopPhotoDescription;
+            set => SetProperty(ref _workshopPhotoDescription, value);
+        }
+
+        public string WorkshopPhotoPath
+        {
+            get => _workshopPhotoPath;
+            private set
+            {
+                if (SetProperty(ref _workshopPhotoPath, value))
+                {
+                    OnPropertyChanged(nameof(WorkshopPhotoPreview));
+                }
+            }
+        }
+
+        public string WorkshopPhotoPreview => WorkshopPhotoPath;
 
         public string WorkshopAdminStatus
         {
@@ -417,6 +450,8 @@ namespace BinderApp.ViewModels
         public ICommand CheckWorkshopAdminAccessCommand { get; }
         public ICommand CopyWorkshopAdminHardwareIdCommand { get; }
         public ICommand PublishWorkshopBindsCommand { get; }
+        public ICommand ChooseWorkshopPhotoCommand { get; }
+        public ICommand PublishWorkshopPhotoCommand { get; }
 
         public ICommand SwitchViewModeCommand { get; }
         public BindEditViewModel? BindEditor
@@ -601,6 +636,78 @@ namespace BinderApp.ViewModels
             {
                 Serilog.Log.Error(ex, "Не удалось опубликовать бинды мастерской");
                 WorkshopAdminStatus = $"Не удалось опубликовать набор: {ex.Message}";
+            }
+            finally
+            {
+                _isPublishingWorkshopPackage = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private void ChooseWorkshopPhoto()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Выбери фото для новой записи мастерской",
+                Filter = "Изображения JPG и PNG|*.jpg;*.jpeg;*.png",
+                CheckFileExists = true,
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            var photo = new FileInfo(dialog.FileName);
+            if (photo.Length is < 1 or > 3 * 1_048_576)
+            {
+                WorkshopAdminStatus = "Фото должно быть размером не более 3 МБ.";
+                return;
+            }
+
+            WorkshopPhotoPath = photo.FullName;
+            WorkshopAdminStatus = $"Фото выбрано: {photo.Name}";
+        }
+
+        private async Task PublishWorkshopPhotoAsync()
+        {
+            if (!IsWorkshopAdminAuthorized || _isPublishingWorkshopPackage) return;
+
+            string name = WorkshopPhotoName.Trim();
+            string description = WorkshopPhotoDescription.Trim();
+            if (name.Length is < 1 or > 60)
+            {
+                WorkshopAdminStatus = "Название записи должно содержать от 1 до 60 символов.";
+                return;
+            }
+
+            if (description.Length is < 1 or > 250)
+            {
+                WorkshopAdminStatus = "Описание записи должно содержать от 1 до 250 символов.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(WorkshopPhotoPath))
+            {
+                WorkshopAdminStatus = "Сначала выбери фото JPG или PNG.";
+                return;
+            }
+
+            _isPublishingWorkshopPackage = true;
+            CommandManager.InvalidateRequerySuggested();
+            WorkshopAdminStatus = $"Публикация фото-записи «{name}»...";
+            try
+            {
+                await _workshopService.PublishPhotoAsync(
+                    WorkshopAdminHardwareId,
+                    name,
+                    description,
+                    WorkshopPhotoPath);
+                await LoadWorkshopAsync();
+                WorkshopAdminStatus = $"Фото-запись «{name}» опубликована. Старые записи не изменялись.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось опубликовать фото-запись мастерской");
+                WorkshopAdminStatus = $"Не удалось опубликовать фото-запись: {ex.Message}";
             }
             finally
             {

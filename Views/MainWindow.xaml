@@ -165,7 +165,10 @@
                              Background="Transparent"
                              BorderThickness="0"
                              Margin="14,12,14,8"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="False"
+                             PreviewMouseWheel="BindsList_PreviewMouseWheel"
                              MouseDoubleClick="ListBox_MouseDoubleClick">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
@@ -444,28 +447,45 @@
                                         BorderBrush="{StaticResource BorderBrush}"
                                         BorderThickness="1"
                                         Padding="14">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                                    <StackPanel>
+                                        <Image Source="{Binding ImageUrl}"
+                                               Height="132"
+                                               Stretch="UniformToFill"
+                                               Margin="0,0,0,10">
+                                            <Image.Style>
+                                                <Style TargetType="Image">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Type}" Value="photo">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
+                                        </Image>
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="14"
                                                    FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextLightBrush}"
                                                    TextWrapping="Wrap"/>
-                                        <TextBlock Grid.Row="1"
-                                                   Text="{Binding Description}"
+                                        <TextBlock Text="{Binding Description}"
                                                    TextWrapping="Wrap"
                                                    Margin="0,8,0,12"/>
-                                        <Button Grid.Row="2"
-                                                Content="Скачать и установить"
-                                                Style="{StaticResource SecondaryButtonStyle}"
+                                        <Button Content="Скачать и установить"
                                                 HorizontalAlignment="Left"
                                                 Command="{Binding DataContext.InstallWorkshopItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                CommandParameter="{Binding}"/>
-                                    </Grid>
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Type}" Value="photo">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -538,6 +558,48 @@
                             <Button Content="Опубликовать бинды выбранной вкладки"
                                     Style="{StaticResource PrimaryButtonStyle}"
                                     Command="{Binding PublishWorkshopBindsCommand}"
+                                    HorizontalAlignment="Left"/>
+                            <Separator Margin="0,18,0,14"/>
+                            <TextBlock Text="Новая запись с фото"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Опубликованные записи нельзя редактировать или удалять. Фото и текст добавятся новой записью."
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <Label Content="Название записи"/>
+                            <TextBox Text="{Binding WorkshopPhotoName, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="60"
+                                     Margin="0,0,0,8"/>
+                            <Label Content="Описание"/>
+                            <TextBox Text="{Binding WorkshopPhotoDescription, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="250"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     MinHeight="58"
+                                     Margin="0,0,0,8"/>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button Content="Выбрать фото..."
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding ChooseWorkshopPhotoCommand}"
+                                        DockPanel.Dock="Right"
+                                        Margin="8,0,0,0"/>
+                                <TextBox Text="{Binding WorkshopPhotoPath, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         VerticalContentAlignment="Center"/>
+                            </DockPanel>
+                            <Image Source="{Binding WorkshopPhotoPreview}"
+                                   MaxHeight="180"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,10"/>
+                            <TextBlock Text="Поддерживаются JPG и PNG, до 3 МБ."
+                                       FontSize="11"
+                                       Margin="0,0,0,8"/>
+                            <Button Content="Опубликовать фото-запись"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Command="{Binding PublishWorkshopPhotoCommand}"
                                     HorizontalAlignment="Left"/>
                         </StackPanel>
                     </ScrollViewer>

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace BinderApp.Models
 {
     public sealed class WorkshopItem
@@ -7,6 +9,10 @@ namespace BinderApp.Models
         public string Description { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string File { get; set; } = string.Empty;
+        public string Image { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string ImageUrl { get; set; } = string.Empty;
     }
 
     public sealed class WorkshopPackage

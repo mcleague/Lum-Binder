@@ -17,6 +17,7 @@ namespace BinderApp.Services
     public sealed class WorkshopService
     {
         private const int MaxDocumentBytes = 1_048_576;
+        private const int MaxWorkshopPhotoBytes = 3 * 1_048_576;
         private static readonly HttpClient HttpClient = CreateHttpClient();
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -81,6 +82,41 @@ namespace BinderApp.Services
             await EnsureAdminResponseSuccessAsync(response);
         }
 
+        public async Task PublishPhotoAsync(
+            string hardwareId,
+            string name,
+            string description,
+            string photoPath)
+        {
+            var image = new FileInfo(photoPath);
+            if (!image.Exists || image.Length is < 1 or > MaxWorkshopPhotoBytes)
+            {
+                throw new InvalidDataException("Фото должно существовать и быть размером не более 3 МБ.");
+            }
+
+            string extension = Path.GetExtension(photoPath).ToLowerInvariant();
+            string contentType = extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                _ => throw new InvalidDataException("Поддерживаются только изображения JPG и PNG.")
+            };
+
+            byte[] bytes = await File.ReadAllBytesAsync(photoPath);
+            byte[] requestBytes = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                hardwareId,
+                name,
+                description,
+                contentType,
+                imageBase64 = Convert.ToBase64String(bytes)
+            }, JsonOptions);
+            using var content = new ByteArrayContent(requestBytes);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            using var response = await HttpClient.PostAsync(GetAdminEndpoint("publish-photo"), content);
+            await EnsureAdminResponseSuccessAsync(response);
+        }
+
         public async Task<IReadOnlyList<WorkshopItem>> LoadCatalogAsync()
         {
             string repository = GitHubRepositorySettings.GetRepository();
@@ -92,13 +128,25 @@ namespace BinderApp.Services
             string url = $"https://raw.githubusercontent.com/{repository}/main/workshop/catalog.json?refresh={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
             byte[] bytes = await ReadDocumentAsync(url);
             List<WorkshopItem>? items = JsonSerializer.Deserialize<List<WorkshopItem>>(bytes, JsonOptions);
+            string imageBaseUrl = $"https://raw.githubusercontent.com/{repository}/main/workshop/images/";
             if (items == null || items.Any(item =>
                     string.IsNullOrWhiteSpace(item.Id) ||
                     string.IsNullOrWhiteSpace(item.Name) ||
-                    string.IsNullOrWhiteSpace(item.File) ||
-                    item.Type is not ("profile" or "binds")))
+                    item.Type is not ("profile" or "binds" or "photo") ||
+                    (item.Type == "photo"
+                        ? string.IsNullOrWhiteSpace(item.Image) ||
+                          !System.Text.RegularExpressions.Regex.IsMatch(
+                              item.Image,
+                              @"^[A-Za-z0-9_-]+\.(jpg|jpeg|png)$",
+                              System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                        : string.IsNullOrWhiteSpace(item.File))))
             {
                 throw new InvalidDataException("Каталог мастерской пуст или содержит некорректные записи.");
+            }
+
+            foreach (var item in items.Where(item => item.Type == "photo"))
+            {
+                item.ImageUrl = imageBaseUrl + Uri.EscapeDataString(item.Image);
             }
 
             return items;
@@ -106,6 +154,11 @@ namespace BinderApp.Services
 
         public async Task<WorkshopPackage> DownloadPackageAsync(WorkshopItem item)
         {
+            if (item.Type == "photo")
+            {
+                throw new InvalidOperationException("Фото-запись не содержит устанавливаемого набора.");
+            }
+
             string repository = GitHubRepositorySettings.GetRepository();
             if (string.IsNullOrEmpty(repository))
             {
