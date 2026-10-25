@@ -33,5 +33,12 @@
     "description": "nrd",
     "type": "binds",
     "file": "hwid-b948acf3-19e8-4f6c-952d-654df5372402.json"
+  },
+  {
+    "id": "hwid-8c124e6b-d870-44e4-9438-9d9401e68375",
+    "name": "Тест",
+    "description": "тест",
+    "type": "binds",
+    "file": "hwid-8c124e6b-d870-44e4-9438-9d9401e68375.json"
   }
 ]
