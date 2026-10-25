@@ -1,0 +1,6 @@
+name = "lum-binder-workshop"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+GITHUB_REPOSITORY = "mcleague/Lum-Binder"

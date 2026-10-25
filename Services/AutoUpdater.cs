@@ -25,6 +25,7 @@ namespace BinderApp.Services
 
         public async Task<bool> CheckAndApplyPendingUpdatesAsync(Action<string> setStatus)
         {
+            string? temporaryPackagePath = null;
             string repository = GitHubRepositorySettings.GetRepository();
 
             if (string.IsNullOrWhiteSpace(repository))
@@ -76,21 +77,26 @@ namespace BinderApp.Services
                     ?? throw new InvalidDataException("У файла обновления отсутствует ссылка для скачивания");
 
                 setStatus($"Загрузка обновления {tagName}");
-                string packagePath = Path.Combine(_configService.UpdatesDir, ReleaseAssetName);
-                string temporaryPackagePath = packagePath + ".download";
+                string packageId = $"{Environment.ProcessId}-{Guid.NewGuid():N}";
+                string packagePath = Path.Combine(_configService.UpdatesDir, $"{ReleaseAssetName}.{packageId}.zip");
+                temporaryPackagePath = Path.Combine(
+                    _configService.UpdatesDir,
+                    $"{ReleaseAssetName}.{packageId}.download");
                 using (var packageResponse = await HttpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
                     packageResponse.EnsureSuccessStatusCode();
-                    await using var output = File.Create(temporaryPackagePath);
+                    await using var output = new FileStream(
+                        temporaryPackagePath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None);
                     await packageResponse.Content.CopyToAsync(output);
                 }
                 File.Move(temporaryPackagePath, packagePath, overwrite: true);
 
-                string stagingDirectory = Path.Combine(_configService.UpdatesDir, $"staging-{tagName}");
-                if (Directory.Exists(stagingDirectory))
-                {
-                    Directory.Delete(stagingDirectory, recursive: true);
-                }
+                string stagingDirectory = Path.Combine(
+                    _configService.UpdatesDir,
+                    $"staging-{tagName}-{Environment.ProcessId}-{Guid.NewGuid():N}");
                 ExtractPackage(packagePath, stagingDirectory);
 
                 string executablePath = Environment.ProcessPath
@@ -102,7 +108,9 @@ namespace BinderApp.Services
                     throw new InvalidDataException("В архиве обновления отсутствует исполняемый файл приложения");
                 }
 
-                string scriptPath = Path.Combine(_configService.UpdatesDir, "install-update.ps1");
+                string scriptPath = Path.Combine(
+                    _configService.UpdatesDir,
+                    $"install-update-{Environment.ProcessId}-{Guid.NewGuid():N}.ps1");
                 File.WriteAllText(scriptPath, InstallScript);
                 var installer = new ProcessStartInfo
                 {
@@ -140,6 +148,27 @@ namespace BinderApp.Services
                 Log.Error(ex, "Не удалось проверить или установить обновления");
                 setStatus("Не удалось проверить обновления; запуск приложения");
                 return false;
+            }
+            finally
+            {
+                if (Directory.Exists(_configService.UpdatesDir))
+                {
+                    if (temporaryPackagePath != null && File.Exists(temporaryPackagePath))
+                    {
+                        try
+                        {
+                            File.Delete(temporaryPackagePath);
+                        }
+                        catch (IOException ex)
+                        {
+                            Log.Warning(ex, "Временный файл обновления еще используется: {Path}", temporaryPackagePath);
+                        }
+                        catch (UnauthorizedAccessException ex)
+                        {
+                            Log.Warning(ex, "Не удалось удалить временный файл обновления: {Path}", temporaryPackagePath);
+                        }
+                    }
+                }
             }
         }
 

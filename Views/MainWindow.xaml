@@ -83,6 +83,14 @@
                                      CommandParameter="5"
                                      Margin="4,0,0,0"
                                      Style="{StaticResource TabStripItemStyle}"/>
+                        <RadioButton Content="Админка"
+                                     GroupName="NavModeGroup"
+                                     IsChecked="{Binding IsWorkshopAdminView, Mode=OneWay}"
+                                     Command="{Binding SwitchViewModeCommand}"
+                                     CommandParameter="6"
+                                     Visibility="{Binding ShowWorkshopAdmin, Converter={x:Static controls:BooleanToVisibilityConverter.Instance}}"
+                                     Margin="4,0,0,0"
+                                     Style="{StaticResource TabStripItemStyle}"/>
                     </StackPanel>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
@@ -468,6 +476,77 @@
                                 Command="{Binding RefreshWorkshopCommand}"
                                 DockPanel.Dock="Right"/>
                         <TextBlock Text="{Binding WorkshopStatus}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,12,0"/>
+                    </DockPanel>
+                </Grid>
+
+                <Grid Visibility="{Binding IsWorkshopAdminView, Converter={x:Static controls:BooleanToVisibilityConverter.Instance}}" Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                        <TextBlock Text="Админка мастерской"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}"/>
+                        <TextBlock Text="HWID — хэш Windows MachineGuid. Это дополнительная проверка, её можно подделать; не используй HWID как единственную защиту ценных данных."
+                                   TextWrapping="Wrap"
+                                   Margin="0,5,0,10"/>
+                        <TextBlock Text="Хэш HWID этого устройства — укажи его в секрете Worker ADMIN_HWID_SHA256:"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,5"/>
+                        <DockPanel>
+                            <Button Content="Копировать HWID"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding CopyWorkshopAdminHardwareIdCommand}"
+                                    DockPanel.Dock="Right"
+                                    Margin="8,0,0,0"/>
+                            <TextBox Text="{Binding WorkshopAdminHardwareId, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     VerticalContentAlignment="Center"/>
+                        </DockPanel>
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="620"
+                                    HorizontalAlignment="Left"
+                                    Visibility="{Binding IsWorkshopAdminAuthorized, Converter={x:Static controls:BooleanToVisibilityConverter.Instance}}">
+                            <TextBlock Text="Новый набор биндов"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}"
+                                       Margin="0,0,0,8"/>
+                            <Label Content="Название набора"/>
+                            <TextBox Text="{Binding WorkshopAdminPackageName, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="60"
+                                     Margin="0,0,0,8"/>
+                            <Label Content="Описание"/>
+                            <TextBox Text="{Binding WorkshopAdminPackageDescription, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="250"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     MinHeight="58"
+                                     Margin="0,0,0,8"/>
+                            <Label Content="Вкладка, бинды которой будут опубликованы"/>
+                            <ComboBox ItemsSource="{Binding Tabs}"
+                                      SelectedItem="{Binding SelectedTab}"
+                                      DisplayMemberPath="Name"
+                                      Margin="0,0,0,12"/>
+                            <Button Content="Опубликовать бинды выбранной вкладки"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Command="{Binding PublishWorkshopBindsCommand}"
+                                    HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                        <Button Content="Проверить доступ"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding CheckWorkshopAdminAccessCommand}"
+                                DockPanel.Dock="Right"/>
+                        <TextBlock Text="{Binding WorkshopAdminStatus}"
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap"
                                    Margin="0,0,12,0"/>

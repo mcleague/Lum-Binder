@@ -4,8 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using BinderApp.Models;
 
 namespace BinderApp.Services
@@ -16,8 +20,66 @@ namespace BinderApp.Services
         private static readonly HttpClient HttpClient = CreateHttpClient();
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+
+        public string GetCurrentHardwareId()
+        {
+            using RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            using RegistryKey? key = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+            string? machineGuid = key?.GetValue("MachineGuid") as string;
+            if (string.IsNullOrWhiteSpace(machineGuid))
+            {
+                throw new InvalidOperationException("Не удалось получить идентификатор Windows для проверки доступа.");
+            }
+
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(machineGuid.Trim().ToUpperInvariant()));
+            return Convert.ToHexString(hash);
+        }
+
+        public async Task<bool> CheckAdminHardwareIdAsync(string hardwareId)
+        {
+            string url = GetAdminEndpoint("status");
+            using var response = await HttpClient.PostAsJsonAsync(url, new { hardwareId }, JsonOptions);
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                return false;
+            }
+
+            await EnsureAdminResponseSuccessAsync(response);
+            return true;
+        }
+
+        public async Task PublishBindsAsync(
+            string hardwareId,
+            string name,
+            string description,
+            IReadOnlyList<Bind> binds)
+        {
+            var request = new
+            {
+                hardwareId,
+                name,
+                description,
+                package = new
+                {
+                    binds = binds.Select(bind => new
+                    {
+                        name = bind.Name,
+                        hotkey = bind.Hotkey,
+                        enabled = bind.Enabled,
+                        steps = bind.Steps.ToArray()
+                    })
+                }
+            };
+
+            byte[] requestBytes = JsonSerializer.SerializeToUtf8Bytes(request, JsonOptions);
+            using var content = new ByteArrayContent(requestBytes);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            using var response = await HttpClient.PostAsync(GetAdminEndpoint("publish"), content);
+            await EnsureAdminResponseSuccessAsync(response);
+        }
 
         public async Task<IReadOnlyList<WorkshopItem>> LoadCatalogAsync()
         {
@@ -27,7 +89,7 @@ namespace BinderApp.Services
                 throw new InvalidOperationException("Каталог станет доступен после публикации приложения из GitHub.");
             }
 
-            string url = $"https://raw.githubusercontent.com/{repository}/main/workshop/catalog.json";
+            string url = $"https://raw.githubusercontent.com/{repository}/main/workshop/catalog.json?refresh={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
             byte[] bytes = await ReadDocumentAsync(url);
             List<WorkshopItem>? items = JsonSerializer.Deserialize<List<WorkshopItem>>(bytes, JsonOptions);
             if (items == null || items.Any(item =>
@@ -95,6 +157,45 @@ namespace BinderApp.Services
             }
 
             return output.ToArray();
+        }
+
+        private static string GetAdminEndpoint(string path)
+        {
+            string workerUrl = WorkshopAdminSettings.GetWorkerUrl();
+            if (string.IsNullOrEmpty(workerUrl))
+            {
+                throw new InvalidOperationException(
+                    "Панель публикации не настроена. Задайте WORKSHOP_API_URL в настройках GitHub Actions и соберите приложение.");
+            }
+
+            return $"{workerUrl}/admin/{path}";
+        }
+
+        private static async Task EnsureAdminResponseSuccessAsync(HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            string detail = await response.Content.ReadAsStringAsync();
+            string message = "Не удалось выполнить запрос к админке мастерской.";
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(detail);
+                if (document.RootElement.TryGetProperty("error", out JsonElement error) &&
+                    error.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(error.GetString()))
+                {
+                    message = error.GetString()!;
+                }
+            }
+            catch (JsonException)
+            {
+                message = $"Worker вернул ошибку {response.StatusCode}.";
+            }
+
+            throw new HttpRequestException(message, null, response.StatusCode);
         }
 
         private static HttpClient CreateHttpClient()

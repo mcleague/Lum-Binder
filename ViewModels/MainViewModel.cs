@@ -41,7 +41,14 @@ namespace BinderApp.ViewModels
         private string _tabValidationMessage = string.Empty;
         private string _searchFilter = string.Empty;
         private string _workshopStatus = "Загрузка каталога...";
+        private string _workshopAdminHardwareId = string.Empty;
+        private string _workshopAdminPackageName = string.Empty;
+        private string _workshopAdminPackageDescription = string.Empty;
+        private string _workshopAdminStatus = "Откройте вкладку, чтобы проверить доступ.";
         private bool _isLoadingWorkshop;
+        private bool _isCheckingWorkshopAdmin;
+        private bool _isPublishingWorkshopPackage;
+        private bool _isWorkshopAdminAuthorized;
         private bool _isBindEditorOpen;
         private bool _isTabEditorOpen;
         private string _loadedProfileId;
@@ -92,6 +99,11 @@ namespace BinderApp.ViewModels
             DeleteTabCommand = new RelayCommand<Tab>(DeleteTab);
             RefreshWorkshopCommand = new RelayCommand(() => _ = LoadWorkshopAsync());
             InstallWorkshopItemCommand = new RelayCommand<WorkshopItem>(item => _ = InstallWorkshopItemAsync(item));
+            CheckWorkshopAdminAccessCommand = new RelayCommand(() => _ = CheckWorkshopAdminAccessAsync());
+            CopyWorkshopAdminHardwareIdCommand = new RelayCommand(CopyWorkshopAdminHardwareId);
+            PublishWorkshopBindsCommand = new RelayCommand(
+                () => _ = PublishWorkshopBindsAsync(),
+                () => IsWorkshopAdminAuthorized && !_isPublishingWorkshopPackage);
 
             // Режимы экрана (Бинды, Переменные, Блокнот)
             SwitchViewModeCommand = new RelayCommand<string>(mode =>
@@ -180,9 +192,14 @@ namespace BinderApp.ViewModels
                     OnPropertyChanged(nameof(IsDescriptionView));
                     OnPropertyChanged(nameof(IsSettingsView));
                     OnPropertyChanged(nameof(IsWorkshopView));
+                    OnPropertyChanged(nameof(IsWorkshopAdminView));
                     if (value == 5)
                     {
                         _ = LoadWorkshopAsync();
+                    }
+                    else if (value == 6)
+                    {
+                        _ = CheckWorkshopAdminAccessAsync();
                     }
                 }
             }
@@ -194,10 +211,48 @@ namespace BinderApp.ViewModels
         public bool IsDescriptionView => CurrentViewMode == 3;
         public bool IsSettingsView => CurrentViewMode == 4;
         public bool IsWorkshopView => CurrentViewMode == 5;
+        public bool ShowWorkshopAdmin => WorkshopAdminSettings.IsAdminBuild;
+        public bool IsWorkshopAdminView => ShowWorkshopAdmin && CurrentViewMode == 6;
         public string VersionLabel =>
             $"Version - {Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.0.2"}";
 
         public ObservableCollection<WorkshopItem> WorkshopItems { get; } = new();
+
+        public string WorkshopAdminHardwareId
+        {
+            get => _workshopAdminHardwareId;
+            private set => SetProperty(ref _workshopAdminHardwareId, value);
+        }
+
+        public string WorkshopAdminPackageName
+        {
+            get => _workshopAdminPackageName;
+            set => SetProperty(ref _workshopAdminPackageName, value);
+        }
+
+        public string WorkshopAdminPackageDescription
+        {
+            get => _workshopAdminPackageDescription;
+            set => SetProperty(ref _workshopAdminPackageDescription, value);
+        }
+
+        public string WorkshopAdminStatus
+        {
+            get => _workshopAdminStatus;
+            private set => SetProperty(ref _workshopAdminStatus, value);
+        }
+
+        public bool IsWorkshopAdminAuthorized
+        {
+            get => _isWorkshopAdminAuthorized;
+            private set
+            {
+                if (SetProperty(ref _isWorkshopAdminAuthorized, value))
+                {
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
 
         public string WorkshopStatus
         {
@@ -359,6 +414,9 @@ namespace BinderApp.ViewModels
         public ICommand DeleteTabCommand { get; }
         public ICommand RefreshWorkshopCommand { get; }
         public ICommand InstallWorkshopItemCommand { get; }
+        public ICommand CheckWorkshopAdminAccessCommand { get; }
+        public ICommand CopyWorkshopAdminHardwareIdCommand { get; }
+        public ICommand PublishWorkshopBindsCommand { get; }
 
         public ICommand SwitchViewModeCommand { get; }
         public BindEditViewModel? BindEditor
@@ -444,6 +502,113 @@ namespace BinderApp.ViewModels
             }
         }
 
+        private async Task CheckWorkshopAdminAccessAsync()
+        {
+            if (_isCheckingWorkshopAdmin) return;
+
+            _isCheckingWorkshopAdmin = true;
+            IsWorkshopAdminAuthorized = false;
+            WorkshopAdminStatus = "Проверка доступа к мастерской...";
+            try
+            {
+                WorkshopAdminHardwareId = _workshopService.GetCurrentHardwareId();
+                IsWorkshopAdminAuthorized = await _workshopService.CheckAdminHardwareIdAsync(WorkshopAdminHardwareId);
+                WorkshopAdminStatus = IsWorkshopAdminAuthorized
+                    ? "Доступ разрешён. Можно публиковать бинды выбранной вкладки."
+                    : "Для этого устройства доступ не настроен. Добавьте его HWID в секрет Worker.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось проверить доступ к админке мастерской");
+                WorkshopAdminStatus = $"Не удалось проверить доступ: {ex.Message}";
+            }
+            finally
+            {
+                _isCheckingWorkshopAdmin = false;
+            }
+        }
+
+        private void CopyWorkshopAdminHardwareId()
+        {
+            if (string.IsNullOrEmpty(WorkshopAdminHardwareId))
+            {
+                WorkshopAdminStatus = "Сначала проверьте доступ, чтобы получить HWID этого устройства.";
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(WorkshopAdminHardwareId);
+                WorkshopAdminStatus = "Хэш HWID скопирован.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось скопировать HWID админки мастерской");
+                WorkshopAdminStatus = $"Не удалось скопировать HWID: {ex.Message}";
+            }
+        }
+
+        private async Task PublishWorkshopBindsAsync()
+        {
+            if (!IsWorkshopAdminAuthorized || _isPublishingWorkshopPackage) return;
+
+            string name = WorkshopAdminPackageName.Trim();
+            string description = WorkshopAdminPackageDescription.Trim();
+            if (name.Length is < 1 or > 60)
+            {
+                WorkshopAdminStatus = "Название должно содержать от 1 до 60 символов.";
+                return;
+            }
+
+            if (description.Length is < 1 or > 250)
+            {
+                WorkshopAdminStatus = "Описание должно содержать от 1 до 250 символов.";
+                return;
+            }
+
+            if (SelectedTab == null || SelectedTab.Binds.Count is < 1 or > 100)
+            {
+                WorkshopAdminStatus = "Выберите вкладку, содержащую от 1 до 100 биндов.";
+                return;
+            }
+
+            if (SelectedTab.Binds.Any(bind =>
+                    string.IsNullOrWhiteSpace(bind.Name) ||
+                    bind.Name.Length > 80 ||
+                    bind.Hotkey.Length > 40 ||
+                    bind.Steps.Count is < 1 or > 25 ||
+                    bind.Steps.Any(step => step.Length > 1000)))
+            {
+                WorkshopAdminStatus = "Проверьте бинды: название до 80 символов, клавиша до 40, от 1 до 25 шагов по 1000 символов.";
+                return;
+            }
+
+            _isPublishingWorkshopPackage = true;
+            CommandManager.InvalidateRequerySuggested();
+            WorkshopAdminStatus = $"Публикация биндов вкладки «{SelectedTab.Name}»...";
+            try
+            {
+                await _workshopService.PublishBindsAsync(
+                    WorkshopAdminHardwareId,
+                    name,
+                    description,
+                    SelectedTab.Binds);
+                WorkshopAdminStatus = $"Набор «{name}» опубликован. Обновляю каталог...";
+                await LoadWorkshopAsync();
+                WorkshopAdminStatus = $"Набор «{name}» опубликован в мастерской.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось опубликовать бинды мастерской");
+                WorkshopAdminStatus = $"Не удалось опубликовать набор: {ex.Message}";
+            }
+            finally
+            {
+                _isPublishingWorkshopPackage = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
         private async Task InstallWorkshopItemAsync(WorkshopItem? item)
         {
             if (item == null) return;
@@ -489,6 +654,7 @@ namespace BinderApp.ViewModels
                     }
 
                     var importedBind = bind.Clone();
+                    importedBind.Name = GetUniqueBindName(SelectedTab.Binds, importedBind.Name);
                     SelectedTab.Binds.Add(importedBind);
                     addedCount++;
                 }
@@ -609,6 +775,7 @@ namespace BinderApp.ViewModels
             if (_isAddingBind)
             {
                 if (_editingTab == null) return;
+                edited.Name = GetUniqueBindName(_editingTab.Binds, edited.Name);
                 _editingTab.Binds.Add(edited);
                 SelectedBind = edited;
             }
@@ -624,6 +791,27 @@ namespace BinderApp.ViewModels
             SaveCurrentConfig();
             RegisterHotkeys();
             OnPropertyChanged(nameof(FilteredBinds));
+        }
+
+        private static string GetUniqueBindName(IEnumerable<Bind> binds, string name)
+        {
+            string baseName = name.Trim();
+            var existingNames = new HashSet<string>(
+                binds.Select(bind => bind.Name.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+            if (!existingNames.Contains(baseName))
+            {
+                return baseName;
+            }
+
+            for (int suffix = 1; ; suffix++)
+            {
+                string candidate = $"{baseName} ({suffix})";
+                if (!existingNames.Contains(candidate))
+                {
+                    return candidate;
+                }
+            }
         }
 
         private static bool HotkeysEquivalent(string first, string second)

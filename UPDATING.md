@@ -10,6 +10,10 @@ The workflow embeds its own GitHub repository name into each release build. Loca
 
 The app needs write access to its installation directory to apply updates. Install it in a user-writable folder rather than `Program Files`.
 
+Release builds also embed the public `WORKSHOP_API_URL` GitHub Actions variable. Set it to the deployed Cloudflare Worker base URL to enable the workshop integration. GitHub releases set `WorkshopAdminBuild=false`, so public builds do not show the admin panel. For a private local admin build, set `WorkshopAdminBuild=true` and provide `WorkshopApiUrl` as MSBuild properties.
+
 ## Workshop catalog
 
 The in-app Workshop reads `workshop/catalog.json` from the `main` branch and downloads JSON packages from `workshop/packs/`. Use catalog entries with type `profile` for full profiles (`tabs`) or `binds` for bind collections (`binds`). Keep package files small; the app rejects workshop JSON larger than 1 MiB. Profiles install as separate profiles and bind collections append to the selected tab.
+
+The **Админка** publishes the selected tab through the Cloudflare Worker. Configure its `ADMIN_HWID_SHA256` secret with the SHA-256 hash shown in the app. This hash is based on Windows `MachineGuid` and is spoofable; it is not strong authentication.

@@ -22,6 +22,8 @@ jobs:
 
       - name: Publish self-contained application
         shell: pwsh
+        env:
+          WORKSHOP_API_URL: ${{ vars.WORKSHOP_API_URL }}
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           dotnet publish BinderApp.csproj `
@@ -33,6 +35,8 @@ jobs:
             -p:DebugSymbols=false `
             -p:Version=$version `
             -p:UpdateRepository=$env:GITHUB_REPOSITORY `
+            -p:WorkshopApiUrl=$env:WORKSHOP_API_URL `
+            -p:WorkshopAdminBuild=false `
             -o publish
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE

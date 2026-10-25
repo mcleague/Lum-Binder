@@ -8,6 +8,8 @@
     <Product>Lum Binder</Product>
     <Version>1.0.2</Version>
     <UpdateRepository Condition="'$(UpdateRepository)' == ''">REPLACE_WITH_GITHUB_OWNER/REPOSITORY</UpdateRepository>
+    <WorkshopApiUrl Condition="'$(WorkshopApiUrl)' == ''">REPLACE_WITH_WORKER_URL</WorkshopApiUrl>
+    <WorkshopAdminBuild Condition="'$(WorkshopAdminBuild)' == ''">false</WorkshopAdminBuild>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -31,6 +33,14 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>UpdateRepository</_Parameter1>
       <_Parameter2>$(UpdateRepository)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>WorkshopApiUrl</_Parameter1>
+      <_Parameter2>$(WorkshopApiUrl)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>WorkshopAdminBuild</_Parameter1>
+      <_Parameter2>$(WorkshopAdminBuild)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 
