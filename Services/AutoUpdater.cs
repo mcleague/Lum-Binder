@@ -25,13 +25,9 @@ namespace BinderApp.Services
 
         public async Task<bool> CheckAndApplyPendingUpdatesAsync(Action<string> setStatus)
         {
-            string repository = Assembly.GetEntryAssembly()?
-                .GetCustomAttributes<AssemblyMetadataAttribute>()
-                .FirstOrDefault(attribute => attribute.Key == "UpdateRepository")?.Value
-                ?? string.Empty;
+            string repository = GitHubRepositorySettings.GetRepository();
 
-            if (string.IsNullOrWhiteSpace(repository) ||
-                repository.Contains("REPLACE_WITH_", StringComparison.Ordinal))
+            if (string.IsNullOrWhiteSpace(repository))
             {
                 Log.Information("Автообновление не настроено: не указан публичный GitHub-репозиторий");
                 setStatus("Автообновление пока не настроено");

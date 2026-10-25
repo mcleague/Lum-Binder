@@ -1,0 +1,30 @@
+[
+  {
+    "id": "fsb-starter",
+    "name": "ФСБ — базовый профиль",
+    "description": "Готовая вкладка с командами представления, проверки документов и задержания.",
+    "type": "profile",
+    "file": "fsb-starter.json"
+  },
+  {
+    "id": "mvd-starter",
+    "name": "МВД — базовый профиль",
+    "description": "Набор для представления сотрудника, проверки документов и оформления остановки.",
+    "type": "profile",
+    "file": "mvd-starter.json"
+  },
+  {
+    "id": "dps-starter",
+    "name": "ДПС — базовый профиль",
+    "description": "Готовые команды для остановки транспорта и проверки водителя.",
+    "type": "profile",
+    "file": "dps-starter.json"
+  },
+  {
+    "id": "medical-binds",
+    "name": "Медицинские бинды",
+    "description": "Набор биндов для оказания первой помощи. Устанавливается в выбранную вкладку.",
+    "type": "binds",
+    "file": "medical-binds.json"
+  }
+]

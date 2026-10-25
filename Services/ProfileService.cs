@@ -13,6 +13,7 @@ namespace BinderApp.Services
     public class ProfileService
     {
         private readonly ConfigService _configService;
+        private readonly AppSettings _settings;
         public List<Profile> Profiles { get; private set; } = new();
         public Profile ActiveProfile { get; private set; }
 
@@ -21,6 +22,7 @@ namespace BinderApp.Services
         public ProfileService(ConfigService configService, AppSettings settings)
         {
             _configService = configService;
+            _settings = settings;
 
             // Загружаем существующие профили или создаем базовые
             DiscoverProfiles();
@@ -47,7 +49,10 @@ namespace BinderApp.Services
                         string profileId = fn.Substring("binder_".Length);
                         if (!Profiles.Exists(p => p.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase)))
                         {
-                            Profiles.Add(new Profile { Id = profileId, Name = profileId });
+                            string displayName = _settings.ProfileNamesById.TryGetValue(profileId, out string? savedName)
+                                ? savedName
+                                : profileId;
+                            Profiles.Add(new Profile { Id = profileId, Name = displayName });
                         }
                     }
                 }
@@ -55,6 +60,14 @@ namespace BinderApp.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Ошибка обнаружения профилей");
+            }
+        }
+
+        public void AddProfile(Profile profile)
+        {
+            if (!Profiles.Exists(existing => existing.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                Profiles.Add(profile);
             }
         }
 

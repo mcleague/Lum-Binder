@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
@@ -22,6 +25,7 @@ namespace BinderApp.ViewModels
         private readonly TrayService _trayService;
         private readonly AppSettings _settings;
         private readonly NotepadService _notepadService;
+        private readonly WorkshopService _workshopService;
 
         private readonly Dictionary<string, int> _activeHotkeyIds = new();
 
@@ -36,7 +40,8 @@ namespace BinderApp.ViewModels
         private string _tabName = string.Empty;
         private string _tabValidationMessage = string.Empty;
         private string _searchFilter = string.Empty;
-        private string _hotkeyStatus = string.Empty;
+        private string _workshopStatus = "Загрузка каталога...";
+        private bool _isLoadingWorkshop;
         private bool _isBindEditorOpen;
         private bool _isTabEditorOpen;
         private string _loadedProfileId;
@@ -53,7 +58,8 @@ namespace BinderApp.ViewModels
             GlobalHotkeyManager hotkeyManager,
             BindExecutor bindExecutor,
             TrayService trayService,
-            AppSettings settings)
+            AppSettings settings,
+            WorkshopService workshopService)
         {
             _configService = configService;
             _profileService = profileService;
@@ -61,6 +67,7 @@ namespace BinderApp.ViewModels
             _bindExecutor = bindExecutor;
             _trayService = trayService;
             _settings = settings;
+            _workshopService = workshopService;
 
             _notepadService = new NotepadService(_configService);
             _loadedProfileId = _profileService.ActiveProfile.Id;
@@ -83,6 +90,8 @@ namespace BinderApp.ViewModels
             SaveTabCommand = new RelayCommand(SaveTab);
             CancelTabEditCommand = new RelayCommand(() => IsTabEditorOpen = false);
             DeleteTabCommand = new RelayCommand<Tab>(DeleteTab);
+            RefreshWorkshopCommand = new RelayCommand(() => _ = LoadWorkshopAsync());
+            InstallWorkshopItemCommand = new RelayCommand<WorkshopItem>(item => _ = InstallWorkshopItemAsync(item));
 
             // Режимы экрана (Бинды, Переменные, Блокнот)
             SwitchViewModeCommand = new RelayCommand<string>(mode =>
@@ -109,9 +118,12 @@ namespace BinderApp.ViewModels
             get => _selectedTab;
             set
             {
-                SetProperty(ref _selectedTab, value);
-                OnPropertyChanged(nameof(CurrentBinds));
-                OnPropertyChanged(nameof(FilteredBinds));
+                if (SetProperty(ref _selectedTab, value))
+                {
+                    OnPropertyChanged(nameof(CurrentBinds));
+                    OnPropertyChanged(nameof(FilteredBinds));
+                    RegisterHotkeys();
+                }
             }
         }
 
@@ -167,6 +179,11 @@ namespace BinderApp.ViewModels
                     OnPropertyChanged(nameof(IsNotepadView));
                     OnPropertyChanged(nameof(IsDescriptionView));
                     OnPropertyChanged(nameof(IsSettingsView));
+                    OnPropertyChanged(nameof(IsWorkshopView));
+                    if (value == 5)
+                    {
+                        _ = LoadWorkshopAsync();
+                    }
                 }
             }
         }
@@ -176,6 +193,17 @@ namespace BinderApp.ViewModels
         public bool IsNotepadView => CurrentViewMode == 2;
         public bool IsDescriptionView => CurrentViewMode == 3;
         public bool IsSettingsView => CurrentViewMode == 4;
+        public bool IsWorkshopView => CurrentViewMode == 5;
+        public string VersionLabel =>
+            $"Version - {Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.0.2"}";
+
+        public ObservableCollection<WorkshopItem> WorkshopItems { get; } = new();
+
+        public string WorkshopStatus
+        {
+            get => _workshopStatus;
+            private set => SetProperty(ref _workshopStatus, value);
+        }
 
         // --- Блокнот ---
 
@@ -329,6 +357,8 @@ namespace BinderApp.ViewModels
         public ICommand SaveTabCommand { get; }
         public ICommand CancelTabEditCommand { get; }
         public ICommand DeleteTabCommand { get; }
+        public ICommand RefreshWorkshopCommand { get; }
+        public ICommand InstallWorkshopItemCommand { get; }
 
         public ICommand SwitchViewModeCommand { get; }
         public BindEditViewModel? BindEditor
@@ -361,14 +391,6 @@ namespace BinderApp.ViewModels
             private set => SetProperty(ref _tabValidationMessage, value);
         }
 
-        public string HotkeyStatus
-        {
-            get => string.IsNullOrEmpty(_hotkeyStatus)
-                ? "Горячие клавиши запускают бинды."
-                : $"Не зарегистрированы горячие клавиши: {_hotkeyStatus}";
-            private set => SetProperty(ref _hotkeyStatus, value);
-        }
-
         public bool IsTabEditorOpen
         {
             get => _isTabEditorOpen;
@@ -391,8 +413,102 @@ namespace BinderApp.ViewModels
             OnPropertyChanged(nameof(Organization));
             SelectedBind = null;
             SelectedTab = Tabs.FirstOrDefault();
-            RegisterHotkeys();
             _trayService.RebuildMenu(_config);
+        }
+
+        private async Task LoadWorkshopAsync()
+        {
+            if (_isLoadingWorkshop) return;
+
+            _isLoadingWorkshop = true;
+            WorkshopStatus = "Загрузка каталога...";
+            try
+            {
+                var items = await _workshopService.LoadCatalogAsync();
+                WorkshopItems.Clear();
+                foreach (var item in items)
+                {
+                    WorkshopItems.Add(item);
+                }
+
+                WorkshopStatus = $"Доступно наборов: {WorkshopItems.Count}";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось загрузить каталог мастерской");
+                WorkshopStatus = $"Не удалось загрузить мастерскую: {ex.Message}";
+            }
+            finally
+            {
+                _isLoadingWorkshop = false;
+            }
+        }
+
+        private async Task InstallWorkshopItemAsync(WorkshopItem? item)
+        {
+            if (item == null) return;
+
+            WorkshopStatus = $"Загрузка «{item.Name}»...";
+            try
+            {
+                var package = await _workshopService.DownloadPackageAsync(item);
+                if (item.Type == "profile")
+                {
+                    string profileId = $"workshop_{Guid.NewGuid():N}";
+                    _configService.SaveBinds(new BinderConfig { Tabs = package.Tabs }, profileId);
+                    _settings.ProfileNamesById[profileId] = item.Name;
+                    _configService.SaveSettings(_settings);
+                    var profile = new Profile { Id = profileId, Name = item.Name };
+                    _profileService.AddProfile(profile);
+                    OnPropertyChanged(nameof(Profiles));
+                    _profileService.SwitchProfile(profileId);
+                    WorkshopStatus = $"Профиль «{item.Name}» установлен и активирован";
+                    return;
+                }
+
+                if (item.Type != "binds")
+                {
+                    throw new InvalidDataException($"Неизвестный тип набора: {item.Type}");
+                }
+
+                if (SelectedTab == null)
+                {
+                    WorkshopStatus = "Сначала выбери вкладку для установки биндов";
+                    return;
+                }
+
+                int addedCount = 0;
+                foreach (var bind in package.Binds)
+                {
+                    if (bind.Steps.Count == 0 ||
+                        (bind.Enabled && !string.Equals(bind.Hotkey, "Не назначен", StringComparison.OrdinalIgnoreCase) &&
+                         SelectedTab.Binds.Any(existing =>
+                             existing.Enabled && HotkeysEquivalent(existing.Hotkey, bind.Hotkey))))
+                    {
+                        continue;
+                    }
+
+                    var importedBind = bind.Clone();
+                    SelectedTab.Binds.Add(importedBind);
+                    addedCount++;
+                }
+
+                if (addedCount > 0)
+                {
+                    SaveCurrentConfig();
+                    RegisterHotkeys();
+                    OnPropertyChanged(nameof(FilteredBinds));
+                }
+
+                WorkshopStatus = addedCount == 0
+                    ? "Новые бинды не добавлены: сочетания клавиш заняты или пакет пуст"
+                    : $"Добавлено биндов: {addedCount}";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось установить набор мастерской {ItemId}", item.Id);
+                WorkshopStatus = $"Ошибка установки «{item.Name}»: {ex.Message}";
+            }
         }
 
         public void SaveCurrentConfig()
@@ -404,11 +520,9 @@ namespace BinderApp.ViewModels
         {
             _hotkeyManager.UnregisterAll();
             _activeHotkeyIds.Clear();
-            var failedHotkeys = new List<string>();
-
-            foreach (var tab in _config.Tabs)
+            if (SelectedTab != null)
             {
-                foreach (var bind in tab.Binds)
+                foreach (var bind in SelectedTab.Binds)
                 {
                     if (bind.Enabled && !string.IsNullOrWhiteSpace(bind.Hotkey) && bind.Hotkey != "Не назначен")
                     {
@@ -420,13 +534,12 @@ namespace BinderApp.ViewModels
                         }
                         else
                         {
-                            failedHotkeys.Add(b.Hotkey);
+                            Serilog.Log.Warning("Не зарегистрирована клавиша {Hotkey} для бинда {BindName}", b.Hotkey, b.Name);
                         }
                     }
                 }
             }
 
-            HotkeyStatus = string.Join(", ", failedHotkeys.Distinct(StringComparer.OrdinalIgnoreCase));
             _trayService.RebuildMenu(_config);
         }
 

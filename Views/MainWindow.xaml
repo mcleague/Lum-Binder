@@ -13,7 +13,7 @@
     <Border Background="{StaticResource BackgroundBrush}"
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="6"
+            CornerRadius="0"
             ClipToBounds="True">
         <Grid>
             <Grid.RowDefinitions>
@@ -76,6 +76,13 @@
                                      CommandParameter="4"
                                      Margin="4,0,0,0"
                                      Style="{StaticResource TabStripItemStyle}"/>
+                        <RadioButton Content="Мастерская"
+                                     GroupName="NavModeGroup"
+                                     IsChecked="{Binding IsWorkshopView, Mode=OneWay}"
+                                     Command="{Binding SwitchViewModeCommand}"
+                                     CommandParameter="5"
+                                     Margin="4,0,0,0"
+                                     Style="{StaticResource TabStripItemStyle}"/>
                     </StackPanel>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
@@ -114,7 +121,7 @@
                                     Background="{StaticResource InputBackgroundBrush}"
                                     BorderBrush="{StaticResource BorderBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="4"
+                                    CornerRadius="0"
                                     Height="30"
                                     VerticalAlignment="Center">
                                 <Grid>
@@ -164,7 +171,7 @@
                                                     Background="{StaticResource PanelBrush}"
                                                     BorderBrush="{StaticResource BorderBrush}"
                                                     BorderThickness="1"
-                                                    CornerRadius="4"
+                                                    CornerRadius="0"
                                                     Padding="10,8">
                                                 <ContentPresenter/>
                                             </Border>
@@ -207,7 +214,7 @@
                                             Background="{StaticResource InputBackgroundBrush}"
                                             BorderBrush="{StaticResource BorderBrush}"
                                             BorderThickness="1"
-                                            CornerRadius="3"
+                                            CornerRadius="0"
                                             Padding="9,4"
                                             Margin="12,0"
                                             VerticalAlignment="Center">
@@ -269,7 +276,7 @@
                                     Background="{StaticResource PanelBrush}"
                                     BorderBrush="{StaticResource BorderBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="4"
+                                    CornerRadius="0"
                                     Padding="12"
                                     Margin="0,8,0,0">
                                 <StackPanel>
@@ -317,7 +324,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}"
                                    Margin="0,0,0,16"/>
-                        <TextBlock Text="Version - 1.0.0"
+                        <TextBlock Text="{Binding VersionLabel}"
                                    FontSize="14"
                                    Foreground="{StaticResource TextLightBrush}"
                                    Margin="0,0,0,8"/>
@@ -380,6 +387,92 @@
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
+
+                <Grid Visibility="{Binding IsWorkshopView, Converter={x:Static controls:BooleanToVisibilityConverter.Instance}}" Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                        <TextBlock Text="Мастерская"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}"/>
+                        <TextBlock Text="Готовые профили и наборы биндов. Для установки наборов биндов сначала выбери вкладку."
+                                   TextWrapping="Wrap"
+                                   Margin="0,5,0,0"/>
+                    </StackPanel>
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding WorkshopItems}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,12,12"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="280"
+                                        MinHeight="152"
+                                        Background="{StaticResource PanelBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1"
+                                        Padding="14">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding Description}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,8,0,12"/>
+                                        <Button Grid.Row="2"
+                                                Content="Скачать и установить"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                HorizontalAlignment="Left"
+                                                Command="{Binding DataContext.InstallWorkshopItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                        <Button Content="Обновить каталог"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding RefreshWorkshopCommand}"
+                                DockPanel.Dock="Right"/>
+                        <TextBlock Text="{Binding WorkshopStatus}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,12,0"/>
+                    </DockPanel>
+                </Grid>
             </Grid>
 
             <Border Grid.Row="2"
@@ -407,10 +500,6 @@
                                 Style="{StaticResource DangerButtonStyle}"
                                 Command="{Binding DeleteBindCommand}"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding HotkeyStatus}"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               FontSize="11"/>
                 </Grid>
             </Border>
 
@@ -421,7 +510,7 @@
                         Background="{StaticResource BackgroundBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="4">
+                        CornerRadius="0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="46"/>
@@ -453,7 +542,7 @@
                                     <Border Background="{StaticResource InputBackgroundBrush}"
                                             BorderBrush="{StaticResource BorderBrush}"
                                             BorderThickness="1"
-                                            CornerRadius="3"
+                                            CornerRadius="0"
                                             Padding="10,6">
                                         <TextBlock Text="{Binding BindEditor.Hotkey}"
                                                    Foreground="{StaticResource AccentBrush}"
@@ -556,7 +645,7 @@
                         Background="{StaticResource BackgroundBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="4">
+                        CornerRadius="0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44"/>

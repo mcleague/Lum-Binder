@@ -10,7 +10,7 @@ namespace BinderApp.Models
     /// </summary>
     public class AppSettings : INotifyPropertyChanged
     {
-        private string _accentColor = "#5294E2";
+        private string _accentColor = "#C74343";
         private string _overlayPosition = "top-right";
         private int _stepTimeout = 30;
         private bool _autoStart = false;
@@ -25,6 +25,7 @@ namespace BinderApp.Models
         private string _department = string.Empty;
         private string _organization = string.Empty;
         private Dictionary<string, ProfileVariables> _profileVariablesById = new(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> _profileNamesById = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Шестнадцатеричный цвет акцента (например, "#5294E2").
@@ -138,6 +139,12 @@ namespace BinderApp.Models
         {
             get => _profileVariablesById;
             set => _profileVariablesById = value ?? new Dictionary<string, ProfileVariables>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        public Dictionary<string, string> ProfileNamesById
+        {
+            get => _profileNamesById;
+            set => _profileNamesById = value ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         public ProfileVariables GetProfileVariables(string profileId)

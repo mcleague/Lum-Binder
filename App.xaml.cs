@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Threading;
 using BinderApp.Models;
 using BinderApp.Services;
@@ -71,9 +70,6 @@ namespace BinderApp
             _configService = new ConfigService();
             _settings = _configService.LoadSettings();
 
-            // Применяем акцентный цвет из конфига динамически
-            ApplyAccentColor(_settings.AccentColor);
-
             _autoUpdater = new AutoUpdater(_configService);
             bool updateScheduled = await _autoUpdater.CheckAndApplyPendingUpdatesAsync(
                 status => _splashWindow?.SetStatus(status));
@@ -94,7 +90,14 @@ namespace BinderApp
             _trayService = new TrayService(_profileService, _configService);
 
             // ViewModels и окна
-            _mainVm = new MainViewModel(_configService, _profileService, _hotkeyManager, _bindExecutor, _trayService, _settings);
+            _mainVm = new MainViewModel(
+                _configService,
+                _profileService,
+                _hotkeyManager,
+                _bindExecutor,
+                _trayService,
+                _settings,
+                new WorkshopService());
             _overlayVm = new OverlayViewModel(_bindExecutor);
 
             _overlayWindow = new OverlayWindow(_overlayVm, _settings);
@@ -120,21 +123,6 @@ namespace BinderApp
             _mainWindow.Show();
             _mainWindow.WindowState = WindowState.Normal;
             _mainWindow.Activate();
-        }
-
-        public static void ApplyAccentColor(string hexColor)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(hexColor)) return;
-                var color = (Color)ColorConverter.ConvertFromString(hexColor);
-                Current.Resources["AccentColor"] = color;
-                Current.Resources["AccentBrush"] = new SolidColorBrush(color);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning("Ошибка применения цвета {Color}: {Error}", hexColor, ex.Message);
-            }
         }
 
         public void ExitApplication()
