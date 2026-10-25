@@ -47,5 +47,12 @@
     "description": "хуй",
     "type": "binds",
     "file": "hwid-d5d7e108-c89d-4ef3-84c5-8960f7150207.json"
+  },
+  {
+    "id": "admin-photo-a07ad901-15ac-4fa6-a137-01f367304015",
+    "name": "тес",
+    "description": "тес",
+    "type": "photo",
+    "image": "photo-a07ad901-15ac-4fa6-a137-01f367304015.png"
   }
 ]
