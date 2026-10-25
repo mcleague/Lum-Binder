@@ -40,5 +40,12 @@
     "description": "тест",
     "type": "binds",
     "file": "hwid-8c124e6b-d870-44e4-9438-9d9401e68375.json"
+  },
+  {
+    "id": "hwid-d5d7e108-c89d-4ef3-84c5-8960f7150207",
+    "name": "хуй",
+    "description": "хуй",
+    "type": "binds",
+    "file": "hwid-d5d7e108-c89d-4ef3-84c5-8960f7150207.json"
   }
 ]
