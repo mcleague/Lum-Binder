@@ -117,6 +117,28 @@ namespace BinderApp.Services
             await EnsureAdminResponseSuccessAsync(response);
         }
 
+        public async Task UpdateCatalogEntryAsync(
+            string hardwareId,
+            string id,
+            string name,
+            string description)
+        {
+            using var response = await HttpClient.PostAsJsonAsync(
+                GetAdminEndpoint("update-entry"),
+                new { hardwareId, id, name, description },
+                JsonOptions);
+            await EnsureAdminResponseSuccessAsync(response);
+        }
+
+        public async Task HideCatalogEntryAsync(string hardwareId, string id)
+        {
+            using var response = await HttpClient.PostAsJsonAsync(
+                GetAdminEndpoint("hide-entry"),
+                new { hardwareId, id },
+                JsonOptions);
+            await EnsureAdminResponseSuccessAsync(response);
+        }
+
         public async Task<IReadOnlyList<WorkshopItem>> LoadCatalogAsync()
         {
             string repository = GitHubRepositorySettings.GetRepository();

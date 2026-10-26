@@ -534,6 +534,60 @@
                         <StackPanel MaxWidth="620"
                                     HorizontalAlignment="Left"
                                     Visibility="{Binding IsWorkshopAdminAuthorized, Converter={x:Static controls:BooleanToVisibilityConverter.Instance}}">
+                            <TextBlock Text="Управление опубликованными записями"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Выбери запись, чтобы изменить название или описание. Удаление убирает её только из каталога; файлы и история остаются."
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <ListBox ItemsSource="{Binding WorkshopItems}"
+                                     SelectedItem="{Binding SelectedWorkshopEntry, Mode=TwoWay}"
+                                     MaxHeight="180"
+                                     Background="{StaticResource InputBackgroundBrush}"
+                                     BorderBrush="{StaticResource BorderBrush}"
+                                     BorderThickness="1"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     Margin="0,0,0,8">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="4">
+                                            <TextBlock Text="{Binding Type}"
+                                                       DockPanel.Dock="Right"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       Margin="8,0,0,0"/>
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="{StaticResource TextLightBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Label Content="Название"/>
+                            <TextBox Text="{Binding WorkshopEditName, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="60"
+                                     Margin="0,0,0,8"/>
+                            <Label Content="Описание"/>
+                            <TextBox Text="{Binding WorkshopEditDescription, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="250"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     MinHeight="58"
+                                     Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <Button Content="Сохранить изменения"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding UpdateWorkshopEntryCommand}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="Убрать из каталога"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Command="{Binding HideWorkshopEntryCommand}"/>
+                                <Button Content="Обновить список"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding RefreshWorkshopCommand}"
+                                        Margin="8,0,0,0"/>
+                            </StackPanel>
                             <TextBlock Text="Новый набор биндов"
                                        FontSize="15"
                                        FontWeight="SemiBold"
@@ -565,7 +619,7 @@
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}"
                                        Margin="0,0,0,8"/>
-                            <TextBlock Text="Опубликованные записи нельзя редактировать или удалять. Фото и текст добавятся новой записью."
+                            <TextBlock Text="Фото и описание будут добавлены новой записью."
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,8"/>
                             <Label Content="Название записи"/>

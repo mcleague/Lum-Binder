@@ -48,7 +48,8 @@ The in-app **Админка** can publish the selected tab's binds directly to t
 
 3. In the GitHub repository settings, add the Actions variable `WORKSHOP_API_URL` with the Worker base URL (for example, `https://lum-binder-workshop.<account>.workers.dev`). Release builds embed this public endpoint. Local builds can override it with `-p:WorkshopApiUrl=<worker-url>`.
 4. Reopen **Админка** and check access. Enter a name and description, select the tab to publish, and press **Опубликовать бинды выбранной вкладки**. The package is added directly to `workshop/catalog.json`.
-5. To add a photo post, enter its title and description, select a JPG or PNG image up to 3 MB, and press **Опубликовать фото-запись**. New photo files are stored under `workshop/images/` and displayed as read-only cards in the workshop. Publishing only appends a new catalogue entry; the app has no edit or delete operation for published entries.
+5. To add a photo post, enter its title and description, select a JPG or PNG image up to 3 MB, and press **Опубликовать фото-запись**. New photo files are stored under `workshop/images/` and displayed as cards in the workshop.
+6. Select any catalogue entry in **Управление опубликованными записями** to change its name or description, or remove it from the catalogue. Editing only changes catalogue metadata. Removal is a soft delete: package and image files remain in the repository and Git history.
 
 The HWID is a hash of `MachineGuid`, not a hardware-backed credential; it can be spoofed. Use this HWID-only gate only for a low-risk public workshop. `/approve` remains restricted to `ADMIN_DISCORD_USER_ID`.
 

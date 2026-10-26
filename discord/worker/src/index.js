@@ -7,6 +7,7 @@ const MAX_WORKSHOP_PHOTO_BYTES = 3 * 1_048_576;
 const DISCORD_EPHEMERAL = 64;
 
 class PayloadTooLargeError extends Error {}
+class CatalogEntryNotFoundError extends Error {}
 
 const COMMANDS = [
   {
@@ -111,7 +112,13 @@ export default {
 
 async function handleAdminRequest(request, env, pathname) {
   if (request.method !== "POST" ||
-      !["/admin/status", "/admin/publish", "/admin/publish-photo"].includes(pathname)) {
+      ![
+        "/admin/status",
+        "/admin/publish",
+        "/admin/publish-photo",
+        "/admin/update-entry",
+        "/admin/hide-entry",
+      ].includes(pathname)) {
     return Response.json({ error: "Неизвестный запрос админки." }, { status: 404 });
   }
 
@@ -159,6 +166,38 @@ async function handleAdminRequest(request, env, pathname) {
     } catch (error) {
       console.error("Workshop photo publish failed", error);
       return Response.json({ error: safeError(error) }, { status: 500 });
+    }
+  }
+
+  if (pathname === "/admin/update-entry" || pathname === "/admin/hide-entry") {
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    if (!id || id.length > 120) {
+      return Response.json({ error: "Укажи корректную запись каталога." }, { status: 400 });
+    }
+
+    if (pathname === "/admin/update-entry") {
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      const description = typeof body.description === "string" ? body.description.trim() : "";
+      if (!name || name.length > 60 || !description || description.length > 250) {
+        return Response.json(
+          { error: "Название должно содержать до 60 символов, описание — до 250." },
+          { status: 400 },
+        );
+      }
+    }
+
+    try {
+      const repository = getRepository(env);
+      const message = pathname === "/admin/update-entry"
+        ? await updateCatalogEntry(env, repository, id, body.name.trim(), body.description.trim())
+        : await hideCatalogEntry(env, repository, id);
+      return Response.json({ message });
+    } catch (error) {
+      const status = error instanceof CatalogEntryNotFoundError ? 404 : 500;
+      if (status === 500) {
+        console.error("Workshop catalog management failed", pathname, error);
+      }
+      return Response.json({ error: safeError(error) }, { status });
     }
   }
 
@@ -524,7 +563,7 @@ async function publishCatalogEntry(env, repository, item, contentTreeEntries, co
   const catalogResponse = await githubRequest(
     env,
     "GET",
-    `/repos/${repository}/contents/workshop/catalog.json?ref=main`,
+    `/repos/${repository}/contents/workshop/catalog.json?ref=${parentSha}`,
     undefined,
   );
   const catalogBytes = base64ToBytes(catalogResponse.content.replace(/\s/g, ""));
@@ -541,11 +580,79 @@ async function publishCatalogEntry(env, repository, item, contentTreeEntries, co
     content: `${JSON.stringify(nextCatalog, null, 2)}\n`,
     encoding: "utf-8",
   });
+  await commitCatalogBlob(env, repository, parentSha, catalogBlob.sha, contentTreeEntries, commitMessage);
+}
+
+async function updateCatalogEntry(env, repository, id, name, description) {
+  const { parentSha, catalog } = await loadCatalogAtHead(env, repository);
+  const index = catalog.findIndex((entry) => entry.id === id);
+  if (index < 0) {
+    throw new CatalogEntryNotFoundError("Запись не найдена в каталоге. Обнови список и попробуй ещё раз.");
+  }
+
+  const updatedCatalog = catalog.map((entry, entryIndex) =>
+    entryIndex === index ? { ...entry, name, description } : entry);
+  const catalogBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
+    content: `${JSON.stringify(updatedCatalog, null, 2)}\n`,
+    encoding: "utf-8",
+  });
+  await commitCatalogBlob(
+    env,
+    repository,
+    parentSha,
+    catalogBlob.sha,
+    [],
+    `Update workshop entry: ${name}`,
+  );
+  return `Запись «${name}» обновлена.`;
+}
+
+async function hideCatalogEntry(env, repository, id) {
+  const { parentSha, catalog } = await loadCatalogAtHead(env, repository);
+  const item = catalog.find((entry) => entry.id === id);
+  if (!item) {
+    throw new CatalogEntryNotFoundError("Запись не найдена в каталоге. Обнови список и попробуй ещё раз.");
+  }
+
+  const nextCatalog = catalog.filter((entry) => entry.id !== id);
+  const catalogBlob = await githubRequest(env, "POST", `/repos/${repository}/git/blobs`, {
+    content: `${JSON.stringify(nextCatalog, null, 2)}\n`,
+    encoding: "utf-8",
+  });
+  await commitCatalogBlob(
+    env,
+    repository,
+    parentSha,
+    catalogBlob.sha,
+    [],
+    `Hide workshop entry: ${item.name}`,
+  );
+  return `Запись «${item.name}» убрана из каталога. Файлы сохранены.`;
+}
+
+async function loadCatalogAtHead(env, repository) {
+  const ref = await githubRequest(env, "GET", `/repos/${repository}/git/ref/heads/main`);
+  const parentSha = ref.object.sha;
+  const catalogResponse = await githubRequest(
+    env,
+    "GET",
+    `/repos/${repository}/contents/workshop/catalog.json?ref=${parentSha}`,
+    undefined,
+  );
+  const catalogBytes = base64ToBytes(catalogResponse.content.replace(/\s/g, ""));
+  const catalog = JSON.parse(new TextDecoder().decode(catalogBytes));
+  if (!Array.isArray(catalog)) {
+    throw new Error("Файл каталога мастерской имеет некорректный формат.");
+  }
+  return { parentSha, catalog };
+}
+
+async function commitCatalogBlob(env, repository, parentSha, catalogBlobSha, contentTreeEntries, commitMessage) {
   const tree = await githubRequest(env, "POST", `/repos/${repository}/git/trees`, {
     base_tree: parentSha,
     tree: [
       ...contentTreeEntries,
-      { path: "workshop/catalog.json", mode: "100644", type: "blob", sha: catalogBlob.sha },
+      { path: "workshop/catalog.json", mode: "100644", type: "blob", sha: catalogBlobSha },
     ],
   });
   const commit = await githubRequest(env, "POST", `/repos/${repository}/git/commits`, {

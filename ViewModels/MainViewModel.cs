@@ -47,6 +47,9 @@ namespace BinderApp.ViewModels
         private string _workshopPhotoName = string.Empty;
         private string _workshopPhotoDescription = string.Empty;
         private string _workshopPhotoPath = string.Empty;
+        private WorkshopItem? _selectedWorkshopEntry;
+        private string _workshopEditName = string.Empty;
+        private string _workshopEditDescription = string.Empty;
         private string _workshopAdminStatus = "Откройте вкладку, чтобы проверить доступ.";
         private bool _isLoadingWorkshop;
         private bool _isCheckingWorkshopAdmin;
@@ -111,6 +114,12 @@ namespace BinderApp.ViewModels
             PublishWorkshopPhotoCommand = new RelayCommand(
                 () => _ = PublishWorkshopPhotoAsync(),
                 () => IsWorkshopAdminAuthorized && !_isPublishingWorkshopPackage);
+            UpdateWorkshopEntryCommand = new RelayCommand(
+                () => _ = UpdateWorkshopEntryAsync(),
+                () => IsWorkshopAdminAuthorized && SelectedWorkshopEntry != null && !_isPublishingWorkshopPackage);
+            HideWorkshopEntryCommand = new RelayCommand(
+                () => _ = HideWorkshopEntryAsync(),
+                () => IsWorkshopAdminAuthorized && SelectedWorkshopEntry != null && !_isPublishingWorkshopPackage);
 
             // Режимы экрана (Бинды, Переменные, Блокнот)
             SwitchViewModeCommand = new RelayCommand<string>(mode =>
@@ -268,6 +277,32 @@ namespace BinderApp.ViewModels
         }
 
         public string WorkshopPhotoPreview => WorkshopPhotoPath;
+
+        public WorkshopItem? SelectedWorkshopEntry
+        {
+            get => _selectedWorkshopEntry;
+            set
+            {
+                if (SetProperty(ref _selectedWorkshopEntry, value))
+                {
+                    WorkshopEditName = value?.Name ?? string.Empty;
+                    WorkshopEditDescription = value?.Description ?? string.Empty;
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public string WorkshopEditName
+        {
+            get => _workshopEditName;
+            set => SetProperty(ref _workshopEditName, value);
+        }
+
+        public string WorkshopEditDescription
+        {
+            get => _workshopEditDescription;
+            set => SetProperty(ref _workshopEditDescription, value);
+        }
 
         public string WorkshopAdminStatus
         {
@@ -452,6 +487,8 @@ namespace BinderApp.ViewModels
         public ICommand PublishWorkshopBindsCommand { get; }
         public ICommand ChooseWorkshopPhotoCommand { get; }
         public ICommand PublishWorkshopPhotoCommand { get; }
+        public ICommand UpdateWorkshopEntryCommand { get; }
+        public ICommand HideWorkshopEntryCommand { get; }
 
         public ICommand SwitchViewModeCommand { get; }
         public BindEditViewModel? BindEditor
@@ -518,12 +555,15 @@ namespace BinderApp.ViewModels
             try
             {
                 var items = await _workshopService.LoadCatalogAsync();
+                string? selectedId = SelectedWorkshopEntry?.Id;
+                SelectedWorkshopEntry = null;
                 WorkshopItems.Clear();
                 foreach (var item in items)
                 {
                     WorkshopItems.Add(item);
                 }
 
+                SelectedWorkshopEntry = items.FirstOrDefault(item => item.Id == selectedId);
                 WorkshopStatus = $"Доступно наборов: {WorkshopItems.Count}";
             }
             catch (Exception ex)
@@ -549,8 +589,12 @@ namespace BinderApp.ViewModels
                 WorkshopAdminHardwareId = _workshopService.GetCurrentHardwareId();
                 IsWorkshopAdminAuthorized = await _workshopService.CheckAdminHardwareIdAsync(WorkshopAdminHardwareId);
                 WorkshopAdminStatus = IsWorkshopAdminAuthorized
-                    ? "Доступ разрешён. Можно публиковать бинды выбранной вкладки."
+                    ? "Доступ разрешён. Можно добавлять записи и управлять каталогом."
                     : "Для этого устройства доступ не настроен. Добавьте его HWID в секрет Worker.";
+                if (IsWorkshopAdminAuthorized)
+                {
+                    await LoadWorkshopAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -708,6 +752,77 @@ namespace BinderApp.ViewModels
             {
                 Serilog.Log.Error(ex, "Не удалось опубликовать фото-запись мастерской");
                 WorkshopAdminStatus = $"Не удалось опубликовать фото-запись: {ex.Message}";
+            }
+            finally
+            {
+                _isPublishingWorkshopPackage = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private async Task UpdateWorkshopEntryAsync()
+        {
+            WorkshopItem? item = SelectedWorkshopEntry;
+            if (!IsWorkshopAdminAuthorized || item == null || _isPublishingWorkshopPackage) return;
+
+            string name = WorkshopEditName.Trim();
+            string description = WorkshopEditDescription.Trim();
+            if (name.Length is < 1 or > 60)
+            {
+                WorkshopAdminStatus = "Название должно содержать от 1 до 60 символов.";
+                return;
+            }
+
+            if (description.Length is < 1 or > 250)
+            {
+                WorkshopAdminStatus = "Описание должно содержать от 1 до 250 символов.";
+                return;
+            }
+
+            _isPublishingWorkshopPackage = true;
+            CommandManager.InvalidateRequerySuggested();
+            WorkshopAdminStatus = $"Сохранение записи «{item.Name}»...";
+            try
+            {
+                await _workshopService.UpdateCatalogEntryAsync(
+                    WorkshopAdminHardwareId,
+                    item.Id,
+                    name,
+                    description);
+                await LoadWorkshopAsync();
+                WorkshopAdminStatus = $"Изменения записи «{name}» сохранены.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось изменить запись мастерской {WorkshopItemId}", item.Id);
+                WorkshopAdminStatus = $"Не удалось изменить запись: {ex.Message}";
+            }
+            finally
+            {
+                _isPublishingWorkshopPackage = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private async Task HideWorkshopEntryAsync()
+        {
+            WorkshopItem? item = SelectedWorkshopEntry;
+            if (!IsWorkshopAdminAuthorized || item == null || _isPublishingWorkshopPackage) return;
+
+            _isPublishingWorkshopPackage = true;
+            CommandManager.InvalidateRequerySuggested();
+            WorkshopAdminStatus = $"Удаление «{item.Name}» из каталога...";
+            try
+            {
+                await _workshopService.HideCatalogEntryAsync(WorkshopAdminHardwareId, item.Id);
+                SelectedWorkshopEntry = null;
+                await LoadWorkshopAsync();
+                WorkshopAdminStatus = $"«{item.Name}» удалён из каталога. Файлы и история сохранены.";
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Не удалось убрать запись мастерской {WorkshopItemId}", item.Id);
+                WorkshopAdminStatus = $"Не удалось убрать запись: {ex.Message}";
             }
             finally
             {
